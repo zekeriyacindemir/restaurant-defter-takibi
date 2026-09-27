@@ -2,7 +2,7 @@
 
 Orta ölçekli, tek şubeli bir restoranın günlük finansal hareketlerini takip etmek için geliştirdiğim web uygulaması. Bu projede amacım, işletme sahibinin gelirlerini, giderlerini ve açık borçlarını bilgisayarından veya telefonundan anlaşılır bir arayüz üzerinden takip edebilmesini sağlamak.
 
-İlk sürümü günlük manuel kayıtlar üzerine kurdum. POS entegrasyonu veya kapsamlı bir muhasebe yazılımı yerine, restoranın günlük işleyişinde ihtiyaç duyduğu gelir–gider ve ödeme takibine odaklandım.
+Gelir girişini, gün içinde sınırsız sayıda manuel satış kaydı eklenebilecek şekilde geliştirdim. POS entegrasyonu veya kapsamlı bir muhasebe yazılımı yerine, restoranın günlük işleyişinde ihtiyaç duyduğu gelir–gider ve ödeme takibine odaklandım.
 
 > **Durum: v0.1.0 — çalışan yerel önizleme ve Supabase'e bağlanmaya hazır uygulama kodu.** Canlı Supabase bağlantısı, bulut yayını ve otomatik yedekleme henüz kurulmadı. Ortam değişkenleri tanımlanmadan açılan önizlemede örnek veriler kullanılır; değişiklikler sayfa yenilendiğinde silinir.
 
@@ -46,7 +46,9 @@ Tarayıcıdaki arayüz
 
 **Gider ile ödemeyi ayrı modelledim.** 10.000 TL'lik malzeme alımının 4.000 TL'si ödendiğinde gider 10.000 TL, kalan borç 6.000 TL olur. Borç daha sonra kapatıldığında ikinci kez gider oluşmaz. Ödeme, gerçekleştiği ayın para hareketinde görünür.
 
-**Mükerrer günlük toplamları engelledim.** Aynı gün, kanal ve ödeme yöntemi için tek aktif gelir kaydı tutulur. Günlük form atomik olarak kaydedilir; alanlardan biri hatalıysa formun tamamı geri alınır.
+**Esnek gelir girişi sağladım.** Aynı gün aynı kanal ve ödeme yöntemi için istenen sayıda satış kaydı eklenebilir. Form tek tutar, nakit/kart ve restoran içi/paket servisi seçimlerinden oluşur. Tarihi Türkiye saatine göre otomatik atadım. Tutar alanları boş açılır; yazarken `1000` → `1.000`, `1234,56` → `1.234,56` olarak biçimlenir.
+
+**Tedarikçi borçlarını tek yerde topladım.** Ayrı tahsilat–ödemeler ekranını kaldırdım. Tedarikçilerde toplam kalan borç, tedarikçi bazında borçlar ve kayıt bazında ödeme işlemleri bulunur. Diğer giderlerde tüm dönemlerin ödenmemiş kayıtlarına filtreyle ulaşılır.
 
 **Düzeltmelerde geçmişi korudum.** Hatalı kayıtlar fiziksel olarak silinmez; iptal gerekçesi ve işlemi yapan kişi saklanır. İptal edilen kayıt ve bağlı para hareketleri raporlardan çıkarılır.
 
@@ -97,11 +99,11 @@ Canlı bağlantıyı hazırlamak için `.env.example` dosyasını `.env` adıyla
 
 ## Testler ve mevcut sınırlar
 
-İlk sürümde **10 otomatik test başarıyla geçti**. Kuruş hassasiyetini, siparişin tek sayılmasını, kısmi ödemeleri, aylar arası ödeme hareketlerini, mükerrer kayıtları, iptalleri ve rol kısıtlarını kontrol ettim. Mobil görünüm ile temel gelir/gider akışlarını tarayıcıda da doğruladım.
+27 Eylül kontrolünde **16 otomatik test başarıyla geçti**. Kuruş hassasiyetini, siparişin tek sayılmasını, kısmi ödemeleri, aylar arası ödeme hareketlerini, aynı gün tekrarlı satışları, otomatik tarihi, binlik ayırıcıları, iptalleri ve rol kısıtlarını kontrol ettim. Temel gelir/gider akışlarını tarayıcıda yeniden doğruladım. Mobil görünüm önceki kontrolde incelendi; son kontrolün görünüm ve canlı telefon sınırları DOGRULAMA.md içinde yer alıyor.
 
-PGlite testleri PostgreSQL sorgularını ve RLS kurallarını çalıştırır; gerçek Supabase Auth hizmetinin uçtan uca testi değildir. Canlıya geçmeden önce gerçek kullanıcılarla erişim kontrollerini ve yedekten geri yüklemeyi ayrıca doğrulayacağım. Ayrıntılar: [doğrulama kaydı](DOGRULAMA.md).
+PGlite testleri PostgreSQL sorgularını ve RLS kurallarını çalıştırır; gerçek Supabase Auth hizmetinin uçtan uca testi değildir. Canlıya geçmeden önce gerçek kullanıcılarla erişim kontrollerini ayrıca doğrulayacağım. Yedekleme ve geri yükleme çalışmasını sonraki aşamaya bıraktım. Ayrıntılar: [doğrulama kaydı](DOGRULAMA.md).
 
-Bu sürümde stok, adisyon, vardiya, POS/Yemeksepeti entegrasyonu, otomatik komisyon hesabı ve çevrimdışı eşitleme bulunmuyor. Nakit/kart toplamları aynı gün tahsil edilmiş kabul ediliyor. Gelir–gider farkı resmi net kârı; tahsilat–ödeme farkı gerçek banka/kasa bakiyesini temsil etmiyor.
+Bu sürümde stok, adisyon, vardiya, POS/Yemeksepeti entegrasyonu, otomatik komisyon hesabı ve çevrimdışı eşitleme bulunmuyor. Nakit/kart kayıtları aynı gün tahsil edilmiş kabul ediliyor. Gelir–gider farkı resmi net kârı; tahsilat–ödeme farkı gerçek banka/kasa bakiyesini temsil etmiyor.
 
 ## Sonraki adımlar
 

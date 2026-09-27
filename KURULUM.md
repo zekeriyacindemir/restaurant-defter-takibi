@@ -2,6 +2,8 @@
 
 Bu rehberi geliştirdiğim uygulamayı gerçek Supabase ve Cloudflare hesaplarına bağlamak için hazırladım. Hesap açma, şifre belirleme ve hizmet koşullarını kabul etme adımlarını hesap sahibi tamamlar. Şifreleri veya gizli anahtarları kaynak koduna ve herkese açık kanallara eklemeyin.
 
+Hesaplar hazırsa ekran ekran kısa yol için [BASLANGIC.md](BASLANGIC.md) dosyasını kullanın.
+
 ## 1. Supabase projesi
 
 1. [Supabase](https://supabase.com/dashboard) üzerinden ücretsiz hesap açın, Free planla yeni proje oluşturun. Güçlü veritabanı şifresini parola yöneticisinde saklayın.
@@ -16,6 +18,10 @@ values ('ISLETME_SAHIBI_UUID', 'İşletme sahibi', 'owner');
 ```
 
 Diğer kullanıcıların giriş hesaplarını Authentication üzerinden oluşturduktan sonra uygulamadaki **Kullanıcılar → Kullanıcı yetkilendir** formunda e-posta, ad ve görev atayın. Hesabı pasife almak veritabanı erişimini kapatır. Kullanıcıların kendi kendine rol yükseltmesi mümkün değildir.
+
+### Önceki sürümü kurduysanız
+
+Eski şemanın kurulu olduğu projede sırasıyla `supabase/migrations/20260921_flexible_income.sql` ve `supabase/migrations/20260927_salary_assignment.sql` dosyalarını çalıştırın. İkinci geçiş yeni maaş kayıtlarında personel seçimini zorunlu yapar. Bu geçiş, eski günlük tekillik kuralını kaldırır, tek satış gelir fonksiyonunu kurar ve otomatik tarih desteğini ekler. Mevcut kayıtlar silinmez. Yeni kurulumda güncel `schema.sql` yeterlidir; başlangıç şemasını mevcut veritabanının üzerine tekrar çalıştırmayın.
 
 ## 2. Uygulamayı bağlama
 
@@ -48,7 +54,7 @@ Geliştirme sunucusunu yeniden başlatın. Bağlantı tanımlandığında rol se
 - İşletme sahibi ve müdür maaşları görüyor.
 - Muhasebeci toplam gideri görüyor, kişi bazında maaşlara erişemiyor.
 - Çalışan yalnızca gelir ekliyor; geliştirici araçlarından doğrudan tablo okuma girişimi de mali veri döndürmüyor.
-- Aynı günlük toplam ikinci kez eklenmiyor.
+- Aynı gün aynı ödeme yöntemiyle iki satış girilebiliyor; iki tutar da birer kez toplanıyor.
 - 10.000 TL gider ve 4.000 TL ödeme girildiğinde borç 6.000 TL; kalan ödendiğinde gider hâlâ 10.000 TL.
 - Kartla ödenen 500 TL sipariş toplam geliri yalnızca 500 TL artırıyor.
 - Telefon ve bilgisayarda aynı güncel veriler geliyor. Başka cihazdaki yeni kayıtları görmek için sayfayı yenileyin; canlı anlık eşitleme bu sürümde yok.
@@ -56,7 +62,7 @@ Geliştirme sunucusunu yeniden başlatın. Bağlantı tanımlandığında rol se
 
 ## 5. Ücretsiz planda yedekleme
 
-Supabase Free otomatik günlük yedek sunmuyor; düşük etkinlikte proje duraklayabiliyor. Bu nedenle ücretsiz başlangıcın koşulu ayrı yedek düzeni. Pro başlangıcı 25 ABD doları/ay; son 7 günlük günlük yedek erişimi içeriyor. Kullanım, vergi ve ek özellikler faturayı değiştirebilir. Fiyatı geçiş anında yeniden kontrol edin. [Planlar](https://supabase.com/pricing), [yedekleme](https://supabase.com/docs/guides/platform/backups).
+Supabase Free otomatik günlük yedek sunmuyor; düşük etkinlikte proje duraklayabiliyor. Yedekleme kurulumu kullanıcının isteğiyle sonraki aşamaya bırakıldı; aşağıdaki bölüm ileride uygulanacak rehberdir. Şu anda yedekleme etkin değildir. Pro başlangıcı 25 ABD doları/ay; son 7 günlük günlük yedek erişimi içeriyor. Kullanım, vergi ve ek özellikler faturayı değiştirebilir. Fiyatı geçiş anında yeniden kontrol edin. [Planlar](https://supabase.com/pricing), [yedekleme](https://supabase.com/docs/guides/platform/backups).
 
 Önerilen düzen: her gece şifreli yedek; son 30 günün saklanması; yedeğin ikinci cihazda veya işletme sahibinin özel depolamasında ikinci kopyası; ayda bir geri yükleme denemesi. İşlem başarısız olursa sorumlu kişinin haberdar olacağı kontrol kurulmalı. Bilgisayar kapalıysa yerel zamanlanmış iş çalışmaz; bunu ücretsiz çözümün sınırı olarak kabul etmek gerekir. Bu teslimde görev zamanlanmadı ve depolama hesabına erişilmedi.
 

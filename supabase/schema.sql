@@ -18,7 +18,6 @@ create table public.entries (
  or (kind='expense' and category is not null and channel is null and method is null)),
  check(employee_id is null or category='personnel'), check(method is distinct from 'platform' or channel='order')
 );
-create unique index daily_income_unique on public.entries(date,channel,method) where kind='income' and voided_at is null;
 create index entries_date_idx on public.entries(date);
 create table public.payments (
  id uuid primary key default gen_random_uuid(), entry_id uuid not null references public.entries(id), date date not null,
@@ -47,27 +46,19 @@ create policy audit_read on public.audit_log for select to authenticated using(p
 revoke all on public.members,public.suppliers,public.employees,public.entries,public.payments,public.audit_log from anon,authenticated;
 grant select on public.members,public.suppliers,public.employees,public.entries,public.payments,public.audit_log to authenticated;
 
-create function public.save_income(p_date date,p_rows jsonb,p_memo text default '') returns void language plpgsql security definer set search_path='' as $$
-declare r jsonb; v_id uuid; v_amount bigint; v_role text:=public.app_role(); v_count int:=0;
+create function public.save_income(p_amount bigint,p_channel text,p_method text,p_memo text default '') returns void language plpgsql security definer set search_path='' as $$
+declare v_id uuid; v_role text:=public.app_role(); v_date date:=(now() at time zone 'Europe/Istanbul')::date;
 begin
  if v_role is null then raise exception 'Erişim yetkiniz yok.'; end if;
- if p_date is null or p_date>(now() at time zone 'Europe/Istanbul')::date then raise exception 'Geçerli bir gün seçin; gelecek güne gelir girilemez.'; end if;
- if p_rows is null or jsonb_typeof(p_rows)<>'array' or jsonb_array_length(p_rows)>5 then raise exception 'Geçersiz gelir alanları.'; end if;
- for r in select * from jsonb_array_elements(p_rows) loop
-  v_amount:=(r->>'amount')::bigint;
-  if v_amount<0 then raise exception 'Tutar negatif olamaz.'; end if;
-  if v_amount>0 then
-   insert into public.entries(date,kind,amount,channel,method,memo,created_by)
-   values(p_date,'income',v_amount,r->>'channel',r->>'method',coalesce(p_memo,''),auth.uid()) returning id into v_id;
-   if r->>'method'<>'platform' then
-    insert into public.payments(entry_id,date,amount,method,created_by) values(v_id,p_date,v_amount,r->>'method',auth.uid());
-   end if;
-   insert into public.audit_log(actor,action,entry_id) values(auth.uid(),'income_created',v_id);
-   v_count:=v_count+1;
-  end if;
- end loop;
- if v_count=0 then raise exception 'En az bir gelir tutarı girin.'; end if;
-exception when unique_violation then raise exception 'Bu gün ve ödeme türü için kayıt var. Müdür mevcut kaydı kontrol etmelidir.';
+ if p_amount is null or p_amount<=0 then raise exception 'Tutar sıfırdan büyük olmalı.'; end if;
+ if p_channel is null or p_channel not in ('restaurant','order') or p_method is null or p_method not in ('cash','card') then
+  raise exception 'Ödeme yöntemini ve satış yerini seçin.';
+ end if;
+ insert into public.entries(date,kind,amount,channel,method,memo,created_by)
+ values(v_date,'income',p_amount,p_channel,p_method,coalesce(p_memo,''),auth.uid()) returning id into v_id;
+ insert into public.payments(entry_id,date,amount,method,created_by)
+ values(v_id,v_date,p_amount,p_method,auth.uid());
+ insert into public.audit_log(actor,action,entry_id) values(auth.uid(),'income_created',v_id);
 end $$;
 
 create function public.save_expense(p_date date,p_amount bigint,p_category text,p_paid bigint default 0,p_method text default 'cash',p_due date default null,p_supplier uuid default null,p_employee uuid default null,p_memo text default '') returns void language plpgsql security definer set search_path='' as $$
@@ -75,8 +66,11 @@ declare v_id uuid; v_role text:=public.app_role();
 begin
  if v_role is null or v_role not in ('owner','manager','accountant') then raise exception 'Gider girişi yetkiniz yok.'; end if;
  if p_category='personnel' and v_role not in ('owner','manager') then raise exception 'Maaş bilgilerine erişim yetkiniz yok.'; end if;
+ if p_category='personnel' and p_employee is null then raise exception 'Maaş kaydı için personel seçin.'; end if;
+ if p_category='personnel' and p_supplier is not null then raise exception 'Maaş kaydı tedarikçiye bağlanamaz.'; end if;
  if p_paid is null or p_paid<0 or p_paid>p_amount then raise exception 'Ödenen tutar toplam tutarı aşamaz.'; end if;
- if p_date is null or p_date>(now() at time zone 'Europe/Istanbul')::date then raise exception 'Gelecek güne gider girilemez.'; end if;
+ p_date:=coalesce(p_date,(now() at time zone 'Europe/Istanbul')::date);
+ if p_date>(now() at time zone 'Europe/Istanbul')::date then raise exception 'Gelecek güne gider girilemez.'; end if;
  if p_due is not null and p_due<p_date then raise exception 'Vade gider tarihinden önce olamaz.'; end if;
  insert into public.entries(date,kind,amount,category,supplier_id,employee_id,due_date,memo,created_by)
  values(p_date,'expense',p_amount,p_category,p_supplier,p_employee,p_due,coalesce(p_memo,''),auth.uid()) returning id into v_id;
@@ -91,7 +85,8 @@ begin
  select * into e from public.entries where id=p_entry for update;
  if not found or e.voided_at is not null then raise exception 'Kayıt bulunamadı.'; end if;
  if e.category='personnel' and v_role not in ('owner','manager') then raise exception 'Maaş bilgilerine erişim yetkiniz yok.'; end if;
- if p_date is null or p_date<e.date or p_date>(now() at time zone 'Europe/Istanbul')::date then raise exception 'Ödeme tarihi kayıt tarihinden önce veya gelecekte olamaz.'; end if;
+ p_date:=coalesce(p_date,(now() at time zone 'Europe/Istanbul')::date);
+ if p_date<e.date or p_date>(now() at time zone 'Europe/Istanbul')::date then raise exception 'Ödeme tarihi kayıt tarihinden önce veya gelecekte olamaz.'; end if;
  select coalesce(sum(amount),0) into v_paid from public.payments where entry_id=p_entry;
  if p_amount is null or p_amount<=0 or v_paid+p_amount>e.amount then raise exception 'Tutar kalan bakiyeyi aşamaz.'; end if;
  insert into public.payments(entry_id,date,amount,method,created_by) values(p_entry,p_date,p_amount,p_method,auth.uid());
@@ -153,5 +148,5 @@ begin
  'audit',case when v_role='owner' then (select coalesce(jsonb_agg(a order by a.created_at desc),'[]'::jsonb) from (select * from public.audit_log order by created_at desc limit 50)a) else '[]'::jsonb end
  );
 end $$;
-revoke all on function public.save_income(date,jsonb,text),public.save_expense(date,bigint,text,bigint,text,date,uuid,uuid,text),public.add_payment(uuid,date,bigint,text),public.add_contact(text,text),public.void_entry(uuid,text),public.set_member(text,text,text,boolean),public.dashboard(date) from public;
-grant execute on function public.save_income(date,jsonb,text),public.save_expense(date,bigint,text,bigint,text,date,uuid,uuid,text),public.add_payment(uuid,date,bigint,text),public.add_contact(text,text),public.void_entry(uuid,text),public.set_member(text,text,text,boolean),public.dashboard(date) to authenticated;
+revoke all on function public.save_income(bigint,text,text,text),public.save_expense(date,bigint,text,bigint,text,date,uuid,uuid,text),public.add_payment(uuid,date,bigint,text),public.add_contact(text,text),public.void_entry(uuid,text),public.set_member(text,text,text,boolean),public.dashboard(date) from public;
+grant execute on function public.save_income(bigint,text,text,text),public.save_expense(date,bigint,text,bigint,text,date,uuid,uuid,text),public.add_payment(uuid,date,bigint,text),public.add_contact(text,text),public.void_entry(uuid,text),public.set_member(text,text,text,boolean),public.dashboard(date) to authenticated;
