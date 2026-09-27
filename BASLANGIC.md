@@ -42,6 +42,23 @@ Projenin **Connect** penceresinden şu değerleri al:
 
 ## 5. Cloudflare Pages üzerinden GitHub'daki kodu yayınla
 
+### Zaten Workers projesi açtıysan
+
+Mevcut projeyi kullanabilirsin. Depodaki `wrangler.jsonc`, derlenen `dist` klasörünü statik site olarak yayınlar; otomatik Vite dönüştürmesine gerek yoktur.
+
+- **Settings → Build → Build command:** `npm run build`
+- **Deploy command:** `npx wrangler deploy`
+- **Build → Variables and secrets:** aşağıdaki dört ortam değişkenini ekle.
+- Üretim dalı `main`, kök klasör depo kökü olmalı.
+- Bu ayarları kaydettikten sonra son `main` commit'inden yeni derleme başlat. Eski başarısız commit'in yeniden denenmesi yeni yapılandırmayı içermez.
+- Yayın adresi `workers.dev` olabilir. Son adımda Supabase Site URL alanına verilen gerçek adresi yaz.
+
+`wrangler init` veya `wrangler setup` komutlarını deploy komutu olarak kullanma. Mevcut yapılandırmayla Vite eklentisi eklenmeden derlenmiş dosyalar yayınlanır. Yerel demo `dist` klasörü canlıya yüklenmez; Cloudflare önce gerçek ortam değişkenleriyle `npm run build` çalıştırır.
+
+[Cloudflare statik dosya yapılandırması](https://developers.cloudflare.com/workers/static-assets/)
+
+### Pages projesi açıyorsan
+
 1. Cloudflare hesabında **Workers & Pages → Create application** yolunu aç. **Pages / Get started → Import an existing Git repository** veya **Connect to Git** seçeneğini bul. Menü metni değişebilir; hedef Git deposundan Pages projesi oluşturmaktır.
 2. GitHub hesabını bağla. Depo erişimini yalnızca `restaurant-defter-takibi` ile sınırla. Bu bağlantı Cloudflare'ın kodu okuyup siteyi derlemesi içindir.
 3. `zekeriyacindemir/restaurant-defter-takibi` deposunu seç.
